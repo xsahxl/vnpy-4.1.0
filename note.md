@@ -193,58 +193,6 @@ def add(a, b):
 # 切换到指定目录
 ```
 
-# A股日线数据获取 
-
-```python
-# 封装函数
-from datetime import datetime
-from vnpy.trader.constant import Exchange, Interval
-from vnpy.trader.object import BarData
-from vnpy.trader.database import DB_TZ, database_manager
-
-def download_stock_daily_data(symbol: str, exchange: Exchange):
-    """基于代码和交易所下载数据"""
-    exchange_map = {
-        Exchange.SSE: "sh",
-        Exchange.SZSE: "sz",
-    }
-    exchange_str = exchange_map[exchange]
-
-    url = f"http://api.finance.ifeng.com/akdaily/?code={exchange_str}{symbol}&type=last"
-    r = requests.get(url)
-    record = r.json()["record"]
-
-    bar_data = []
-    for rd in record:
-        dt = datetime.strptime(rd[0], "%Y-%m-%d")
-        bar = BarData(
-            symbol=symbol,
-            exchange=exchange,
-            datetime=DB_TZ.localize(dt),
-            interval=Interval.DAILY,
-            open_price=rd[1],
-            high_price=rd[2],
-            close_price=rd[3],
-            low_price=rd[4],
-            volume=rd[5],
-            gateway_name="IFENG"
-        )
-        bar_data.append(bar)
-    return bar_data
-
-# 尝试下载
-bar_data = download_stock_daily_data("600036", Exchange.SSE)
-
-# 转换DataFrame
-import pandas as pd
-df = pd.DataFrame.from_records([bar.__dict__ for bar in bar_data])
-
-# 保存到csv文件
-df.to_csv("demo.csv")
-
-# 写入数据库
-database_manager.save_bar_data(bar_data)
-```
 
 
 # 币圈行情数据获取
@@ -409,3 +357,112 @@ from vnpy.trader.database import get_database
 db = get_database()
 db.save_bar_data(bar_data)
 ```
+
+
+# 分段下载连续数据
+
+每次只能查询一定数量的数据（比如 1000 根）
+完成一次查询后，用结束时间作为下一次查询的起始时间
+直到全部查询完（时间戳超过目标或者其他标准）
+基于时间戳对缓存的 K 线数据排序
+最终返回可以直接使用的 BarData 列表
+
+```python
+# 加载模块
+import requests
+from pytz import timezone
+from datetime import datetime
+
+from vnpy.trader.constant import Exchange, Interval
+from vnpy.trader.object import BarData
+
+# 开始K线查询函数
+CHINA_TZ = timezone("Asia/Shanghai")
+
+def download_binance_minute_data(symbol: str, start: str, end: str):
+    """基于代码和交易所下载数据"""
+    base = "https://api.binance.com"
+    endpoint = "/api/v3/klines"
+    url = base + endpoint
+
+    # 开始和结束时间
+    start_dt = datetime.strptime(start, "%Y%m%d")
+    start_dt = CHINA_TZ.localize(start_dt)
+
+    end_dt = datetime.strptime(end, "%Y%m%d")
+    end_dt = CHINA_TZ.localize(end_dt)
+
+    # 查询缓存变量
+    bar_data = {}  # 使用字典对时间戳去重
+    finished = False  # 查询结束
+
+    # 持续循环
+    while True:
+        # 执行REST数据查询
+        params = {
+            "symbol": symbol,
+            "interval": "1m",
+            "startTime": int(start_dt.timestamp() * 1000),
+            "limit": 1000
+        }
+        r = requests.get(url, params=params)
+        data = r.json()
+
+        # 如果有返回的数据，则进行处理
+        if data:
+            for l in data:
+                # 生成时间戳
+                dt = datetime.fromtimestamp(l[0]/1000)
+                dt = CHINA_TZ.localize(dt)
+
+                # 检查是否已经超出结束时间，若超出则说明已经完成
+                if dt > end_dt:
+                    finished = True  # 标识完成状态
+                    break             # 退出for循环
+
+                # 解析K线数据
+                bar = BarData(
+                    symbol=symbol,
+                    exchange=Exchange.BINANCE,
+                    datetime=dt,
+                    interval=Interval.MINUTE,
+                    open_price=float(l[1]),
+                    high_price=float(l[2]),
+                    low_price=float(l[3]),
+                    close_price=float(l[4]),
+                    volume=float(l[5]),
+                    gateway_name="BINANCE"
+                )
+                bar_data[bar.datetime] = bar
+
+                            # 打印本轮查询范围
+            print(start_dt, bar.datetime)
+
+            # 将本轮的结束时间戳，作为新一轮的开始时间
+            start_dt = bar.datetime
+        # 否则说明已经结束
+        else:
+            finished = True
+
+        # 结束则退出while循环
+        if finished:
+            break
+
+    # 对时间戳排序
+    dts = list(bar_data.keys())
+    dts.sort()
+
+    # 然后以列表形式返回
+    return [bar_data[dt] for dt in dts]
+
+
+# 测试一下结果
+bar_data = download_binance_minute_data("BTCUSDT", "20250801", "20250810")
+print(bar_data[0])
+print(bar_data[-1])
+
+import pandas as pd
+df = pd.DataFrame.from_records([{"close": bar.close_price} for bar in bar_data])
+df.to_csv("BTC_close.csv")
+```
+
