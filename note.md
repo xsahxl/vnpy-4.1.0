@@ -466,3 +466,420 @@ df = pd.DataFrame.from_records([{"close": bar.close_price} for bar in bar_data])
 df.to_csv("BTC_close.csv")
 ```
 
+# 初识NumPy
+
+```python
+import numpy as np
+import plotly.express as px
+
+a = np.arange(50)
+print(a)
+
+fig = px.line(a)
+fig.show()
+```
+
+# ndarray数组对象
+
+```python
+import numpy as np
+
+# 生成随机数组
+data = np.random.randn(10)
+
+# 查看数据
+data
+
+# 数组运算
+data + data
+
+data * 10
+
+
+# 创建数组对象
+data1 = [3, 4, 5, 6, 7, 8]
+arr1 = np.array(data1)
+
+# 查看数组类型
+type(arr1)
+
+# 查看数组内容
+arr1
+
+# 二维数组
+data2 = [
+    [1, 3, 5, 7, 9],
+    [2, 4, 6, 8, 10]
+]
+arr2 = np.array(data2)
+
+# 查看数组
+arr2
+
+# 查看数组维度
+arr2.ndim
+
+# 查看数组形状
+arr2.shape
+
+# 查看数据类型
+arr2.dtype
+
+# 转换为浮点数数组
+arr3 = arr2.astype("float")
+
+arr3
+
+arr3.dtype
+
+
+# numpy版的range
+np.arange(10)
+
+# 全0数组
+np.zeros(10)
+
+# 全1数组
+np.ones(10)
+```
+
+# 向量化运算函数
+
+```python
+# 用CSV模块加载数据
+from csv import DictReader
+
+with open("BTC_close.csv") as f:
+    reader = DictReader(f)
+    close_data = [row["close"] for row in reader]
+
+# 查看前10个数据
+close_data[:10]
+
+# 转换为数组
+import numpy as np
+
+close_array = np.array(close_data).astype("float")
+
+# 取最后20个元素
+sample_array = close_array[-20:].copy()
+
+# 查看sample_array
+sample_array
+
+# 四则运算（这里以加法为例）
+sample_array + sample_array
+
+# 数组每个元素乘以10
+sample_array * 10
+
+# 数组每个元素除以1000
+sample_array / 1000
+
+# 计算均值
+sample_array.mean()
+
+# 计算中位数
+np.median(sample_array)
+
+# 计算最大值
+sample_array.max()
+
+# 计算最小值
+sample_array.min()
+
+# 计算标准差
+sample_array.std()
+
+# 累积求和
+np.cumsum(sample_array)
+```
+
+# 数组进阶编程
+```python
+import numpy as np
+
+# 创建数组对象
+data1 = [3, 4, 5, 6, 7, 8]
+arr1 = np.array(data1)
+
+# 基于索引访问数据
+arr1[0]
+arr1[-1]
+
+# 基于索引切片
+buf = arr1[1:3]
+
+# 查看切片结果
+buf
+
+# 切片结果只是视图（而非新的数组对象），修改视图会影响原数组
+buf[0] = 10
+
+arr1
+
+# 用List作对比
+buf2 = data1[1:3]
+buf2
+buf2[0] = 10
+data1
+
+# 用copy来复制创建新的ndarray
+buf3 = arr1[1:3].copy()
+print(buf3)
+
+# 二维数组
+data2 = [
+    [1, 3, 5, 7, 9],
+    [2, 4, 6, 8, 10]
+]
+arr2 = np.array(data2)
+
+# 查看 arr2
+arr2
+
+# 两种索引方式获取元素
+arr2[1][2]
+arr2[1, 2]
+
+# 布尔索引
+index = arr2 > 3
+index
+
+# 基于布尔值筛选出数据（会丢失数组形状）
+arr2[arr2 > 3]
+```
+
+# 计算大盘的双均线
+
+```python
+import numpy as np
+import plotly.express as px
+import pandas as pd
+import pandas as pa
+from data_tool import download_binance_minute_data
+
+bar_data = download_binance_minute_data("BTCUSDT", "20250901", "20250902")
+
+# 提取收盘价
+close_prices = [bar.close_price for bar in bar_data]
+
+# 绘制曲线
+fig = px.line(close_prices)
+fig.show()
+
+# 计算移动平均值: 是一种常用的时间序列数据平滑方法，用于消除短期波动，突出长期趋势。
+def moving_average(data: list, window: int):
+    # 最前面的window窗口数据无法计算
+    ma = [0 for i in range(window - 1)]
+
+    # 滚动求和，然后除以窗口得到均值
+    for start_ix in range(len(data) - (window - 1)):
+        end_ix = start_ix + window
+        value = sum(data[start_ix:end_ix]) / window
+        ma.append(value)
+
+    # 返回结果
+    return ma
+
+# 计算不同窗口的移动平均
+ma10 = moving_average(close_prices, 10)
+ma20 = moving_average(close_prices, 20)
+
+# 创建 DataFrame
+d = {
+    "close": close_prices,
+    "ma10": ma10,
+    "ma20": ma20
+}
+df = pd.DataFrame(d)
+
+# 绘制折线图
+fig = px.line(df)
+fig.show()
+```
+
+# Series和DataFrame
+
+```python
+import pandas as pd
+from data_tool import download_binance_minute_data
+
+# 创建对象
+s = pd.Series(range(10, 20))
+
+s.index
+
+s.values
+
+s > 15
+
+s[s > 15]
+
+
+# 自定义标签
+s2 = pd.Series([29, 20, 35], index=["shanghai", "beijing", "shenzhen"])
+
+# 查看 s2
+s2
+
+# 获取 "shanghai" 对应的值
+s2["shanghai"]
+
+
+bar_data = download_binance_minute_data("BTCUSDT", "20250901", "20250902")
+
+df = pd.DataFrame.from_records([bar.__dict__ for bar in bar_data])
+
+
+# 基于多个列表的创建
+dts = []
+open_prices = []
+high_prices = []
+low_prices = []
+close_prices = []
+
+for bar in bar_data:
+    dts.append(bar.datetime)
+    open_prices.append(bar.open_price)
+    high_prices.append(bar.high_price)
+    low_prices.append(bar.low_price)
+    close_prices.append(bar.close_price)
+
+df2 = pd.DataFrame(dict(open=open_prices, high=high_prices, low=low_prices, close=close_prices), index=dts)
+
+# 查看头部数据
+df2.head()
+
+# 提取某列
+open_s = df2["open"]
+
+open_s
+
+# 绘制折线图
+import plotly.express as px
+fig = px.line(df2)
+fig.show()
+
+```
+
+# 索引和切片
+```python
+import pandas as pd
+from data_tool import download_binance_minute_data
+
+# 下载币安分钟线的DataFrame
+def download_df(symbol: str, start: str, end: str):
+    bars = download_binance_minute_data(symbol, start, end)
+    df = pd.DataFrame.from_records([bar.__dict__ for bar in bars])
+    df.index = df["datetime"]
+    return df
+
+df1 = download_df("BTCUSDT", "20250801", "20250810")
+df2 = download_df("BTCUSDT", "20250806", "20210815")
+
+df1.index
+
+df1.index.name
+
+df1.index[:10]
+
+# 删掉某一列
+df3 = df1.drop("open_price", axis=1)
+df3
+
+# iloc访问
+df3.iloc[0, 1]
+
+# 切片访问
+df3.iloc[1:5, 3:6]
+
+# loc访问
+df3.loc["2021-08-05", "close_price"]
+```
+
+# 常用统计指标计算
+
+## 统计数量（count）
+count 用于统计数据集中有效数据的数量，即非缺失值的个数。通过它可以了解数据的完整程度，若 count 数值与数据总量差距较大，说明存在较多缺失值，可能需要对数据进行缺失值处理，如填充或删除等操作，以保证后续分析的准确性
+
+## 求和（sum、cumsum）
+sum 用于计算数据集中所有数值的总和。在金融领域，可用于计算某一时间段内的总交易量；在销售场景中，能统计一段时间的总销售额等，帮助快速获取数据的总量信息
+
+cumsum（累积求和）它会依次计算从数据起始位置到当前位置的数值总和。例如，在分析股票价格的累计涨幅时，cumsum 可以展示出随着时间推移，价格的累积变化情况，便于观察数据的累积趋势。
+
+# 均值（mean）
+mean 计算的是数据的算术平均值，反映了数据的集中趋势。比如，计算一组学生的考试平均分，能大致了解整体的学习水平。但均值容易受到极端值（极大或极小值）的影响，当数据中存在极端值时，均值可能无法很好地代表数据的一般水平，此时可结合其他指标（如中位数）一起分析。
+
+## 极值（max、min）
+max 用于找出数据集中的最大值。在分析产品价格时，max 可以确定价格的最高值，帮助了解价格的上限情况；在监测系统性能指标时，能找到性能的峰值。
+
+min 则是找出数据集中的最小值，可用于确定价格下限、性能最低值等，与 max 配合使用，能快速掌握数据的波动范围。
+
+## 中位数（median）
+median 是将数据按大小顺序排列后，位于中间位置的数值（若数据个数为偶数，则为中间两个数的平均值）。它不受极端值的影响，在数据存在极端值时，比均值更能代表数据的集中趋势。例如，在统计居民收入水平时，若存在少数极高收入者，中位数能更合理地反映大部分居民的收入状况。
+
+```python
+import pandas as pd
+
+# 读取 CSV 文件，将 "datetime" 列设为索引
+df = pd.read_csv("demo.csv", index_col="datetime")
+
+# 查看 DataFrame 的前几行数据
+df.head()
+
+# 统计数量
+df.count()
+
+# 对 "volume" 列求和
+df["volume"].sum()
+
+# 对 "volume" 列进行累计求和
+df["volume"].cumsum()
+
+# 计算 "volume" 的均值
+df["volume"].mean()
+
+# 求 "high_price" 列的最大值
+df["high_price"].max()
+
+# 求 "low_price" 列的最小值
+df["low_price"].min()
+
+# 求中位数
+df["close_price"].median()
+
+# 求百分比变动
+df["return"] = df["close_price"].pct_change()
+
+# 查看 return 列
+df["return"]
+
+# 标准差
+df["return"].std()
+
+# 极值索引（最大值索引）
+df["return"].idxmax()
+
+# 极值索引（最小值索引）
+df["return"].idxmin()
+
+# 汇总描述
+df["return"].describe()
+```
+
+## 百分比变动（pct_change）
+pct_change 用于计算数据的百分比变化。它会将当前数据与上一个数据进行比较，得出相对变化的百分比。在金融领域，可用于计算股票价格、收益率等的环比变化情况，帮助分析数据的波动幅度和趋势变化。例如，对于时间序列的收盘价数据，使用 pct_change 能直观地看到每天收盘价相对于前一天的涨跌幅度。
+
+## 标准差（std）
+标准差是用来衡量数据离散程度的指标。它反映了数据相对于均值的分散情况，标准差越大，说明数据的波动越剧烈，离散程度越高；标准差越小，数据越集中在均值附近。在风险分析中，标准差常被用于衡量投资组合的风险水平，标准差大意味着投资风险高，因为收益的波动大，不确定性强。
+
+## 极值索引（idxmax、idxmin）
+
+idxmax 用于获取数据集中最大值所在的索引位置。通过它可以快速定位到数据中最大数值对应的时间或其他标识信息，有助于分析数据出现峰值的时间点或条件。比如，在分析某商品的日销量数据时，idxmax 能找到销量最高的那一天。
+
+idxmin 则是获取数据集中最小值所在的索引位置，可用于定位数据的最低值出现的位置，与 idxmax 配合使用，能全面了解数据极值的分布情况。
+
+## 汇总描述（describe）
+
+describe 可以生成数据的汇总统计信息，包括计数（count）、均值（mean）、标准差（std）、最小值（min）、四分位数（25%、50%、75%）和最大值（max）等。它能一次性提供数据的多个关键统计指标，帮助快速把握数据的整体分布特征，是数据探索性分析中非常实用的工具。
