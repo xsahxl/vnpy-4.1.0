@@ -5,6 +5,7 @@ from datetime import datetime
 
 from vnpy.trader.constant import Exchange, Interval
 from vnpy.trader.object import BarData
+import pandas as pd
 
 # 开始K线查询函数
 CHINA_TZ = timezone("Asia/Shanghai")
@@ -85,3 +86,16 @@ def download_binance_minute_data(symbol: str, start: str, end: str):
 
     # 然后以列表形式返回
     return [bar_data[dt] for dt in dts]
+
+
+def download_data(symbol: str, exchange: str) -> pd.DataFrame:
+    """下载数据"""
+    exchange = exchange.upper()
+    if exchange == Exchange.BINANCE.value:
+        bars = download_binance_minute_data(symbol, "20250801", "20250810")
+        df = pd.DataFrame.from_records([bar.__dict__ for bar in bars])
+        df.index = df["datetime"]
+        return df
+    else:
+        raise ValueError(f"不支持的交易所: {exchange}")
+    

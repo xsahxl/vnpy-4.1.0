@@ -883,3 +883,118 @@ idxmin 则是获取数据集中最小值所在的索引位置，可用于定位�
 ## 汇总描述（describe）
 
 describe 可以生成数据的汇总统计信息，包括计数（count）、均值（mean）、标准差（std）、最小值（min）、四分位数（25%、50%、75%）和最大值（max）等。它能一次性提供数据的多个关键统计指标，帮助快速把握数据的整体分布特征，是数据探索性分析中非常实用的工具。
+
+# 回测
+
+```python
+
+from datetime import datetime
+from math import floor
+
+import requests
+import pandas as pd
+import talib
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+from data_tool import download_data
+
+# 尝试下载
+df = download_data("BTCUSDT", "BINANCE")
+
+
+def load_data(symbol: str, exchange: str) -> pd.DataFrame:
+    """加载数据"""
+    filename = f"{exchange}_{symbol}.csv"
+
+    try:
+        df = pd.read_csv(filename)
+        return df
+    except FileNotFoundError:
+        df = download_data(symbol, exchange)
+        df.to_csv(filename, index=False)
+        return df
+
+df = load_data("BTCUSDT", "BINANCE")
+
+help(talib.MACD)
+
+def calculate_indicator(df: pd.DataFrame, fast: int, slow: int, signal: int) -> None:
+    """计算MACD指标"""
+    df["macd"], df["signal"], df["hist"] = talib.MACD(df["close_price"], fast, slow, signal)
+    df.dropna(inplace=True)
+
+calculate_indicator(df, 12, 26, 9)
+
+def run_backtesting(df: pd.DataFrame, capital: int) -> None:
+    """执行回测"""
+    # 计算仓位
+    target = 0
+    target_data = []
+    for _, row in df.iterrows():
+        if not target:
+            if row.macd > row.signal:
+                # 计算交易市值的仓位
+                target = capital / row.close_price
+        else:
+            if row.macd <= row.signal:
+                target = 0
+
+        target_data.append(target)
+
+    df["target"] = target_data
+    df["pos"] = df["target"].shift(1)
+    df["change"] = df["close_price"].diff()
+    df["pnl"] = df["pos"] * df["change"]
+    df["balance"] = df["pnl"].cumsum() + capital
+
+run_backtesting(df, 1000000)
+df
+
+def plot_chart(df: pd.DataFrame) -> None:
+    """绘制资金曲线"""
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+    balance_line = go.Scatter(y=df["balance"], x=df["datetime"], name="MACD Strategy")
+    close_line = go.Scatter(y=df["close_price"], x=df["datetime"], name="Close Price")
+
+    fig.add_trace(balance_line)
+    fig.add_trace(close_line, secondary_y=True)
+    fig.show()
+
+plot_chart(df)
+
+# 极值索引（最大值索引）
+df["close_price"].idxmax()
+
+# 极值索引（最小值索引）
+df["close_price"].idxmin()
+
+```
+
+`talib`（Technical Analysis Library）是Python中一个广泛用于金融市场技术分析的库，提供了大量常用的技术分析指标计算函数，其中 `MACD` 指标（Moving Average Convergence Divergence，指数平滑异同移动平均线）是一种非常经典且实用的技术分析工具，下面从其原理、在 `talib` 库中的使用等方面进行介绍：
+
+### 原理
+`MACD` 指标基于均线的构造原理，通过计算两条不同周期的指数移动平均线（EMA）的差值，再对该差值进行一次移动平均，来反映股价的波动趋势和买卖信号。它主要由三部分构成：
+- **DIF线（Difference）**：即快速移动平均线（一般为12日EMA）与慢速移动平均线（一般为26日EMA）的差值，是 `MACD` 的核心线，反映了短期和长期股价趋势的偏离程度。计算公式为：
+\[DIF = EMA_{12} - EMA_{26}\]
+- **DEA线（Difference Exponential Average）**：对DIF线进行9日指数移动平均得到的线，它是DIF的平滑线，用于辅助判断趋势。计算公式为：
+\[DEA = EMA_{DIF, 9}\] 
+- **MACD柱（Histogram）**：即DIF线与DEA线的差值，以柱状图形式呈现，直观地反映了DIF和DEA之间的偏离程度。计算公式为：
+\[MACD_{柱}= DIF - DEA\] 
+
+### 信号判断
+- **交叉信号**：
+    - **黄金交叉**：当DIF线从下向上穿过DEA线时，形成黄金交叉，是一种看涨信号，表明短期趋势向上，股价可能上涨，常被视为买入信号。
+    - **死亡交叉**：当DIF线从上向下穿过DEA线时，形成死亡交叉，是一种看跌信号，表明短期趋势向下，股价可能下跌，常被视为卖出信号。
+- **柱状线分析**：
+    - **红柱变长**：MACD柱为红色且逐渐变长，说明多方力量在增强，股价上涨动力加大。
+    - **红柱变短**：红柱逐渐变短，意味着多方力量在减弱，股价上涨可能乏力。
+    - **绿柱变长**：MACD柱为绿色且逐渐变长，表明空方力量在增强，股价下跌压力增大。
+    - **绿柱变短**：绿柱逐渐变短，说明空方力量在减弱，股价下跌趋势可能放缓。
+
+### 在talib库中的使用
+在 `talib` 库中，使用 `MACD` 函数可以方便地计算出上述三个指标值，函数原型一般为 `MACD(close, fastperiod=12, slowperiod=26, signalperiod=9)`，参数含义如下：
+- `close`：是一个包含收盘价数据的数组或 `pandas.Series`，代表金融产品在每个时间周期的收盘价。
+- `fastperiod`：快速移动平均线的周期，默认为12。
+- `slowperiod`：慢速移动平均线的周期，默认为26。
+- `signalperiod`：对DIF进行平滑的周期，默认为9。
