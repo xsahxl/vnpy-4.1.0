@@ -99,3 +99,15 @@ def download_data(symbol: str, exchange: str) -> pd.DataFrame:
     else:
         raise ValueError(f"不支持的交易所: {exchange}")
     
+def moving_average(data: list, window: int):
+    """计算移动平均值"""
+    # 最前面的window窗口数据无法计算
+    ma = [0 for i in range(window - 1)]
+    
+    # 滚动求和，然后除以窗口得到均值
+    for start_ix in range(len(data) - (window - 1)):
+        end_ix = start_ix + window
+        value = sum(data[start_ix:end_ix]) / window
+        ma.append(value)
+    
+    return ma
